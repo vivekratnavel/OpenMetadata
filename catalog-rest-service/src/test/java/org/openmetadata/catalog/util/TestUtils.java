@@ -242,4 +242,9 @@ public final class TestUtils {
   public static Map<String, String> userAuthHeaders() {
     return authHeaders("test@open-metadata.org");
   }
+
+  public static String getPrincipal(Map<String, String> authHeaders) {
+    // Get user name from the email address
+    return authHeaders.get(CatalogOpenIdAuthorizationRequestFilter.X_AUTH_PARAMS_EMAIL_HEADER).split("@")[0];
+  }
 }
