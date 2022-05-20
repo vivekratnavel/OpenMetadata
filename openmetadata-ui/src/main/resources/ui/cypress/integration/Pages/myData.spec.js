@@ -139,7 +139,7 @@ describe('MyData page should work', () => {
     visitEntityTab(MYDATA_SUMMARY_OPTIONS.pipelines);
   });
 
-  it('Listing entity in Recent views section with redirection should work properly', () => {
+  it.skip('Listing entity in Recent views section with redirection should work properly', () => {
     // checking for table entity
     checkRecentlyViewElement(0, MYDATA_SUMMARY_OPTIONS.tables);
 
@@ -162,7 +162,7 @@ describe('MyData page should work', () => {
     checkRecentlySearchElement(SEARCH_TERMS.sales.term);
   });
 
-  it('My data, following & feed section should work properly', () => {
+  it.skip('My data, following & feed section should work properly', () => {
     const termArr = Object.values(SEARCH_TERMS);
 
     termArr.forEach((term) => {
