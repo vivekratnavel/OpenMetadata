@@ -55,6 +55,7 @@ jobs:
         with:
           install: false
           record: true
+          build: npx cypress info
           parallel: true
           working-directory: openmetadata-ui/src/main/resources/ui/
           wait-on: 'http://localhost:8585'
