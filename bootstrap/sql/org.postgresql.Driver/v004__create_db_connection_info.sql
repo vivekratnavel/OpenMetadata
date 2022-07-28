@@ -58,3 +58,12 @@ CREATE TABLE IF NOT EXISTS test_case (
 
 UPDATE webhook_entity
 SET json = JSONB_SET(json::jsonb, '{webhookType}', '"generic"', true);
+
+CREATE TABLE IF NOT EXISTS entity_extension_time_series (
+    id VARCHAR(36) NOT NULL,                    -- ID of the from entity
+    extension VARCHAR(256) NOT NULL,            -- Extension name same as entity.fieldName
+    jsonSchema VARCHAR(256) NOT NULL,           -- Schema used for generating JSON
+    json JSONB NOT NULL,
+    timestamp VARCHAR(256) GENERATED ALWAYS AS (json ->> 'timestamp') STORED NOT NULL,
+    PRIMARY KEY (id, extension)
+);
