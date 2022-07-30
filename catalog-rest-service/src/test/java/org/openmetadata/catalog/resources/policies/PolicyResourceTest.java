@@ -48,6 +48,7 @@ import org.openmetadata.catalog.resources.EntityResourceTest;
 import org.openmetadata.catalog.resources.locations.LocationResourceTest;
 import org.openmetadata.catalog.resources.policies.PolicyResource.PolicyList;
 import org.openmetadata.catalog.resources.policies.PolicyResource.ResourceDescriptorList;
+import org.openmetadata.catalog.security.policyevaluator.SubjectContextTest;
 import org.openmetadata.catalog.type.ChangeDescription;
 import org.openmetadata.catalog.type.EntityReference;
 import org.openmetadata.catalog.type.FieldChange;
@@ -61,7 +62,6 @@ import org.openmetadata.catalog.util.TestUtils;
 
 @Slf4j
 public class PolicyResourceTest extends EntityResourceTest<Policy, CreatePolicy> {
-
   private static final String LOCATION_NAME = "aws-s3";
   private static Location location;
 
@@ -135,8 +135,8 @@ public class PolicyResourceTest extends EntityResourceTest<Policy, CreatePolicy>
   @Test
   void post_AccessControlPolicyWithValidRules_200_ok(TestInfo test) throws IOException {
     List<Rule> rules = new ArrayList<>();
-    rules.add(PolicyUtils.accessControlRule(null, null, MetadataOperation.EDIT_DESCRIPTION, true, 0));
-    rules.add(PolicyUtils.accessControlRule(null, null, "DataConsumer", MetadataOperation.EDIT_TAGS, true, 1));
+    rules.add(PolicyUtils.accessControlRule(null, null, MetadataOperation.EDIT_DESCRIPTION, true));
+    rules.add(PolicyUtils.accessControlRule(null, null, "DataConsumer", MetadataOperation.EDIT_TAGS, true));
     CreatePolicy create = createAccessControlPolicyWithRules(getEntityName(test), rules);
     createAndCheckEntity(create, ADMIN_AUTH_HEADERS);
   }
@@ -147,7 +147,7 @@ public class PolicyResourceTest extends EntityResourceTest<Policy, CreatePolicy>
     String policyName = getEntityName(test);
     String ruleName = "rule21";
     List<Rule> rules = new ArrayList<>();
-    rules.add(PolicyUtils.accessControlRule(ruleName, null, null, null, true, 0));
+    rules.add(PolicyUtils.accessControlRule(ruleName, null, null, null, true));
     CreatePolicy create = createAccessControlPolicyWithRules(policyName, rules);
     assertResponse(
         () -> createEntity(create, ADMIN_AUTH_HEADERS),
@@ -158,9 +158,9 @@ public class PolicyResourceTest extends EntityResourceTest<Policy, CreatePolicy>
   @Test
   void post_AccessControlPolicyWithDuplicateRules_400_error(TestInfo test) {
     List<Rule> rules = new ArrayList<>();
-    rules.add(PolicyUtils.accessControlRule("rule1", null, null, MetadataOperation.EDIT_DESCRIPTION, true, 0));
-    rules.add(PolicyUtils.accessControlRule("rule2", null, null, MetadataOperation.EDIT_TAGS, true, 1));
-    rules.add(PolicyUtils.accessControlRule("rule3", null, null, MetadataOperation.EDIT_TAGS, true, 1));
+    rules.add(PolicyUtils.accessControlRule("rule1", null, null, MetadataOperation.EDIT_DESCRIPTION, true));
+    rules.add(PolicyUtils.accessControlRule("rule2", null, null, MetadataOperation.EDIT_TAGS, true));
+    rules.add(PolicyUtils.accessControlRule("rule3", null, null, MetadataOperation.EDIT_TAGS, true));
     String policyName = getEntityName(test);
     CreatePolicy create = createAccessControlPolicyWithRules(policyName, rules);
     assertResponseContains(
@@ -207,6 +207,12 @@ public class PolicyResourceTest extends EntityResourceTest<Policy, CreatePolicy>
           actualResourceDescriptors.getData().stream().filter(rd -> rd.getName().equals(entity)).findFirst().get();
       assertNotNull(resourceDescriptor);
     }
+  }
+
+  @Test
+  void test_subjectContextPolicyIterator() {
+    SubjectContextTest subjectContextTest = new SubjectContextTest();
+    subjectContextTest.testPolicyIterator();
   }
 
   @Override

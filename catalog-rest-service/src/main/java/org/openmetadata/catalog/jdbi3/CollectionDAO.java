@@ -18,6 +18,7 @@ import static org.openmetadata.catalog.jdbi3.locator.ConnectionType.POSTGRES;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -27,6 +28,7 @@ import lombok.Getter;
 import org.apache.commons.lang3.tuple.Triple;
 import org.jdbi.v3.core.mapper.RowMapper;
 import org.jdbi.v3.core.statement.StatementContext;
+import org.jdbi.v3.core.statement.StatementException;
 import org.jdbi.v3.sqlobject.CreateSqlObject;
 import org.jdbi.v3.sqlobject.config.RegisterRowMapper;
 import org.jdbi.v3.sqlobject.customizer.Bind;
@@ -77,7 +79,9 @@ import org.openmetadata.catalog.type.ThreadType;
 import org.openmetadata.catalog.type.UsageDetails;
 import org.openmetadata.catalog.type.UsageStats;
 import org.openmetadata.catalog.type.Webhook;
+import org.openmetadata.catalog.util.EntitiesCount;
 import org.openmetadata.catalog.util.EntityUtil;
+import org.openmetadata.catalog.util.ServicesCount;
 import org.openmetadata.common.utils.CommonUtil;
 
 public interface CollectionDAO {
@@ -197,6 +201,9 @@ public interface CollectionDAO {
 
   @CreateSqlObject
   TestCaseDAO testCaseDAO();
+
+  @CreateSqlObject
+  UtilDAO utilDAO();
 
   interface DashboardDAO extends EntityDAO<Dashboard> {
     @Override
@@ -2193,44 +2200,24 @@ public interface CollectionDAO {
     @SqlUpdate("DELETE FROM entity_extension_time_series WHERE id = :id")
     void deleteAll(@Bind("id") String id);
 
-
     default List<String> listBefore(ListFilter filter, int limit, String before) {
       String entityId = filter.getQueryParam("entityId");
+      String extension = filter.getQueryParam("extension");
       String entityFqn = filter.getQueryParam("entityFqn");
-      String testSuiteId = filter.getQueryParam("testSuiteId");
+      long startTs = Long.parseLong(filter.getQueryParam("startTs"));
+      long endTs = Long.parseLong(filter.getQueryParam("endTs"));
       String condition = filter.getCondition();
 
-      if (entityFqn == null && entityId == null && testSuiteId == null) {
-        return listBefore(filter, limit, before);
-      }
-      if (entityId != null || entityFqn != null) {
-        if (entityId != null) {
-          condition =
-              String.format(
-                  "%s AND id IN (SELECT toId FROM entity_relationship WHERE fromId='%s' AND toEntity='%s' AND relation=%d)",
-                  condition, entityId, Entity.TEST_CASE, Relationship.CONTAINS.ordinal());
-        } else {
-          condition = String.format("%s AND fullyQualifiedName LIKE '%s.%%' ", condition, entityFqn);
-        }
-      }
-      if (testSuiteId != null) {
-        condition =
-            String.format(
-                "%s AND id IN (SELECT toId FROM entity_relationship WHERE fromId='%s' AND toEntity='%s' AND relation=%d AND fromEntity='%s')",
-                condition, testSuiteId, Entity.TEST_CASE, Relationship.HAS.ordinal(), Entity.TEST_SUITE);
-      }
-
-      return listBefore(getTableName(), getNameColumn(), condition, limit, before);
+      return new ArrayList<>();
     }
 
-    @Override
     default List<String> listAfter(ListFilter filter, int limit, String after) {
       String entityId = filter.getQueryParam("entityId");
       String entityFqn = filter.getQueryParam("entityFqn");
       String testSuiteId = filter.getQueryParam("testSuiteId");
       String condition = filter.getCondition();
       if (entityFqn == null && entityId == null && testSuiteId == null) {
-        return EntityDAO.super.listAfter(filter, limit, after);
+        return listAfter(filter, limit, after);
       }
       if (entityId != null || entityFqn != null) {
         if (entityId != null) {
@@ -2249,41 +2236,101 @@ public interface CollectionDAO {
                 condition, testSuiteId, Entity.TEST_CASE, Relationship.HAS.ordinal(), Entity.TEST_SUITE);
       }
 
-      return listAfter(getTableName(), getNameColumn(), condition, limit, after);
+      // return listAfter(getTableName(), getNameColumn(), condition, limit, after);
+      return new ArrayList<>();
+    }
+
+    default String getTableName() {
+      return "entity_extension_timeseries";
+    }
+
+    default String getNameColumn() {
+      return "extension";
     }
 
     @SqlQuery("SELECT count(*) FROM <table> <cond>")
-    int listCount(@Define("table") String table, @Define("extension") String extensionColumn, @Define("cond") String cond);
+    int listCount(
+        @Define("table") String table, @Define("extension") String extensionColumn, @Define("cond") String cond);
 
-    @Override
     default int listCount(ListFilter filter) {
       Integer startTs = Integer.parseInt(filter.getQueryParam("startTs"));
       Integer endTs = Integer.parseInt(filter.getQueryParam("endTs"));
       String extension = filter.getQueryParam("extension");
 
       String condition = filter.getCondition();
-      if (extension == null && startTs == null && endTs == null) {
-        return listCount(filter);
-      }
-      if (entityId != null || entityFqn != null) {
-        if (entityId != null) {
-          condition =
-              String.format(
-                  "%s AND id IN (SELECT toId FROM entity_relationship WHERE fromId='%s' AND toEntity='%s' AND relation=%d)",
-                  condition, entityId, Entity.TEST_CASE, Relationship.CONTAINS.ordinal());
-        } else {
-          condition = String.format("%s AND fullyQualifiedName LIKE '%s.%%' ", condition, entityFqn);
-        }
-      }
-      if (testSuiteId != null) {
-        condition =
-            String.format(
-                "%s AND id IN (SELECT toId FROM entity_relationship WHERE fromId='%s' AND toEntity='%s' AND relation=%d AND fromEntity='%s')",
-                condition, testSuiteId, Entity.TEST_CASE, Relationship.HAS.ordinal(), Entity.TEST_SUITE);
-      }
 
-      return listCount(getTableName(), getNameColumn(), condition);
+      return 0;
     }
   }
 
+  class EntitiesCountRowMapper implements RowMapper<EntitiesCount> {
+    @Override
+    public EntitiesCount map(ResultSet rs, StatementContext ctx) throws SQLException {
+      return new EntitiesCount()
+          .withTableCount(rs.getInt("tableCount"))
+          .withTopicCount(rs.getInt("topicCount"))
+          .withDashboardCount(rs.getInt("dashboardCount"))
+          .withPipelineCount(rs.getInt("pipelineCount"))
+          .withMlmodelCount(rs.getInt("mlmodelCount"))
+          .withServicesCount(rs.getInt("servicesCount"))
+          .withUserCount(rs.getInt("userCount"))
+          .withTeamCount(rs.getInt("teamCount"));
+    }
+  }
+
+  class ServicesCountRowMapper implements RowMapper<ServicesCount> {
+    @Override
+    public ServicesCount map(ResultSet rs, StatementContext ctx) throws SQLException {
+      return new ServicesCount()
+          .withDatabaseServiceCount(rs.getInt("databaseServiceCount"))
+          .withMessagingServiceCount(rs.getInt("messagingServiceCount"))
+          .withDashboardServiceCount(rs.getInt("dashboardServiceCount"))
+          .withPipelineServiceCounte(rs.getInt("pipelineServiceCount"))
+          .withMlModelServiceCount(rs.getInt("mlModelServiceCount"));
+    }
+  }
+
+  interface UtilDAO {
+    @ConnectionAwareSqlQuery(
+        value =
+            "SELECT (SELECT COUNT(*) FROM table_entity) as tableCount, "
+                + "(SELECT COUNT(*) FROM topic_entity) as topicCount, "
+                + "(SELECT COUNT(*) FROM dashboard_entity) as dashboardCount, "
+                + "(SELECT COUNT(*) FROM pipeline_entity) as pipelineCount, "
+                + "(SELECT COUNT(*) FROM ml_model_entity) as mlmodelCount, "
+                + "(SELECT (SELECT COUNT(*) FROM database_entity) + "
+                + "(SELECT COUNT(*) FROM messaging_service_entity)+ "
+                + "(SELECT COUNT(*) FROM dashboard_service_entity)+ "
+                + "(SELECT COUNT(*) FROM pipeline_service_entity)+ "
+                + "(SELECT COUNT(*) FROM mlmodel_service_entity)) as servicesCount, "
+                + "(SELECT COUNT(*) FROM user_entity WHERE JSON_EXTRACT(json, '$.isBot') is NULL) as userCount, "
+                + "(SELECT COUNT(*) FROM team_entity) as teamCount",
+        connectionType = MYSQL)
+    @ConnectionAwareSqlQuery(
+        value =
+            "SELECT (SELECT COUNT(*) FROM table_entity) as tableCount, "
+                + "(SELECT COUNT(*) FROM topic_entity) as topicCount, "
+                + "(SELECT COUNT(*) FROM dashboard_entity) as dashboardCount, "
+                + "(SELECT COUNT(*) FROM pipeline_entity) as pipelineCount, "
+                + "(SELECT COUNT(*) FROM ml_model_entity) as mlmodelCount, "
+                + "(SELECT (SELECT COUNT(*) FROM database_entity) + "
+                + "(SELECT COUNT(*) FROM messaging_service_entity)+ "
+                + "(SELECT COUNT(*) FROM dashboard_service_entity)+ "
+                + "(SELECT COUNT(*) FROM pipeline_service_entity)+ "
+                + "(SELECT COUNT(*) FROM mlmodel_service_entity)) as servicesCount, "
+                + "(SELECT COUNT(*) FROM user_entity WHERE json#>'{isBot}' is NULL) as userCount, "
+                + "(SELECT COUNT(*) FROM team_entity) as teamCount",
+        connectionType = POSTGRES)
+    @RegisterRowMapper(EntitiesCountRowMapper.class)
+    EntitiesCount getAggregatedEntitiesCount() throws StatementException;
+
+    @SqlQuery(
+        "SELECT (SELECT COUNT(*) FROM database_entity) as databaseServiceCount, "
+            + "(SELECT COUNT(*) FROM messaging_service_entity) as messagingServiceCount, "
+            + "(SELECT COUNT(*) FROM dashboard_service_entity) as dashboardServiceCount, "
+            + "(SELECT COUNT(*) FROM pipeline_service_entity) as pipelineServiceCount, "
+            + "(SELECT COUNT(*) FROM mlmodel_service_entity) as mlModelServiceCount")
+    @RegisterRowMapper(ServicesCountRowMapper.class)
+    ServicesCount getAggregatedServicesCount() throws StatementException;
+  }
 }
